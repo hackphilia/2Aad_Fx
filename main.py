@@ -2,74 +2,78 @@ import os
 import time
 from flask import Flask, request
 import telebot
-import google.generativeai as genai
+from google import genai
 
-# 1. SETUP KEYS
+# --- 1. CONFIGURATION ---
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
-CHANNEL_ID = os.environ.get('TELEGRAM_CHAT_ID') 
+CHANNEL_ID = os.environ.get('TELEGRAM_CHAT_ID')
 GEMINI_KEY = os.environ.get('GEMINI_API_KEY')
 
-# Initialize Bots
+# Initialize Telegram & Google AI Client (2026 SDK)
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
-genai.configure(api_key=GEMINI_KEY)
-
-# SWITCHED TO 1.5-FLASH FOR BETTER FREE QUOTA
-model = genai.GenerativeModel('gemini-1.5-flash')
+client = genai.Client(api_key=GEMINI_KEY)
 
 app = Flask(__name__)
 
+# --- 2. AI ANALYSIS FUNCTION ---
 def get_ai_rating(data):
-    """Retries 3 times if Google says 'Quota Exhausted'"""
-    prompt = f"""
-    Analyze this 'Aad-FX' trade: {data}
-    1. Rate confluence 1-10.
-    2. Give a 1-sentence 'Action Plan'.
-    Keep it very brief.
-    """
+    """Sends trade data to Gemini 2.0 and returns analysis."""
+    prompt = (
+        f"Analyze this Aad-FX signal: {data}. "
+        "Give a rating 1-10 and a 1-sentence action plan. "
+        "Be concise and professional."
+    )
+    
+    # Retry loop to handle 429 (Rate Limit) errors
     for attempt in range(3):
         try:
-            response = model.generate_content(prompt)
+            # Use the stable 2.0-flash model for 2026
+            response = client.models.generate_content(
+                model="gemini-2.0-flash", 
+                contents=prompt
+            )
             return response.text
         except Exception as e:
             if "429" in str(e):
-                print(f"Quota hit, retrying in 5s... (Attempt {attempt+1})")
-                time.sleep(5) 
+                time.sleep(5)
                 continue
-            return f"AI Busy: {str(e)[:50]}"
-    return "Rating Timeout - Check Chart"
+            return f"AI Analysis Unavailable ({str(e)[:30]})"
+    return "AI Busy - Review Manually"
 
+# --- 3. WEBHOOK ROUTE ---
 @app.route('/webhook', methods=['POST'])
 def webhook():
     if request.method == 'POST':
-        data = request.json
-        
-        # Get AI Analysis
-        rating = get_ai_rating(data)
-        
-        # Professional Message Formatting
-        msg = (
-            f"🚀 *Aad-FX PREMIUM SIGNAL*\n"
-            f"━━━━━━━━━━━━━━━━━━\n"
-            f"📊 *Asset:* {data.get('ticker', 'N/A')}\n"
-            f"🎯 *Action:* {data.get('signal', 'N/A')}\n"
-            f"💰 *Entry:* {data.get('price', 'N/A')}\n"
-            f"📍 *SL:* {data.get('sl', 'N/A')}\n"
-            f"🏁 *TP3:* {data.get('tp3', 'N/A')}\n"
-            f"━━━━━━━━━━━━━━━━━━\n"
-            f"🧠 *AI ANALYSIS:*\n"
-            f"{rating}\n"
-            f"━━━━━━━━━━━━━━━━━━\n"
-            f"⚠️ *Trade at your own risk.*"
-        )
-        
         try:
-            bot.send_message(CHANNEL_ID, msg, parse_mode='Markdown')
-        except Exception as e:
-            print(f"Telegram Error: {e}")
+            data = request.json
             
-        return 'Success', 200
+            # Get analysis from Gemini
+            ai_analysis = get_ai_rating(data)
+            
+            # Build the Telegram Message
+            msg = (
+                f"🚀 *Aad-FX PREMIUM SIGNAL*\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"📊 *Asset:* {data.get('ticker', 'N/A')}\n"
+                f"⏱️ *Timeframe:* {data.get('tf', 'N/A')}\n"
+                f"🎯 *Action:* {data.get('signal', 'N/A')}\n"
+                f"💰 *Entry:* {data.get('price', 'N/A')}\n"
+                f"📍 *SL:* {data.get('sl', 'N/A')}\n"
+                f"🏁 *TP3:* {data.get('tp3', 'N/A')}\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"🧠 *AI ANALYSIS:*\n"
+                f"{ai_analysis}\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"⚠️ *Trade at your own risk.*"
+            )
+            
+            bot.send_message(CHANNEL_ID, msg, parse_mode='Markdown')
+            return 'OK', 200
+            
+        except Exception as e:
+            print(f"Error: {e}")
+            return 'Error', 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
-    
