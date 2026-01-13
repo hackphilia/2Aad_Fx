@@ -1,4 +1,4 @@
 flask
 pyTelegramBotAPI
-openai
+groq
 gunicorn

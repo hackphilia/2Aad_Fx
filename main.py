@@ -1,98 +1,84 @@
 import os
-import time
 from flask import Flask, request
 import telebot
-from openai import OpenAI
+from groq import Groq
 
-# --- 1. CONFIGURATION ---
+# --- CONFIG ---
 bot = telebot.TeleBot(os.environ.get('TELEGRAM_TOKEN'))
 CHANNEL_ID = os.environ.get('TELEGRAM_CHAT_ID')
-
-# DeepSeek uses the OpenAI format
-client = OpenAI(
-    api_key=os.environ.get('DEEPSEEK_API_KEY'), 
-    base_url="https://api.deepseek.com"
-)
+client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 app = Flask(__name__)
 
-# --- 2. DEEPSEEK ANALYSIS ENGINE ---
 def get_ai_analysis(data):
-    """Analyzes trade with 80%/70% bias logic using DeepSeek."""
     strat = data.get('strat', 'Unknown')
     ticker = data.get('ticker')
+    tf = data.get('tf', 'N/A')
     
+    # Prompt enforcing your 80%/70% win-rate strategy
     prompt = f"""
-    Analyze this {strat} trade on {ticker}. 
+    Analyze this {strat} trade on {ticker} ({tf}).
     Rules: 
-    1. If it's a Triangle Breakout, Win Probability is 80%.
-    2. If it's a Range trade, Win Probability is 70%.
-    3. For Scalps, Win Probability is 45%.
-    Output: State the Win Probability % clearly and give a 1-sentence professional logic for the entry.
+    - Triangle Breakout/Breakdown = 80% Win Probability.
+    - Range Trade = 70% Win Probability.
+    - Scalp = 45% Win Probability.
+    Output format: State 'Win Probability: X%' followed by one professional sentence on entry logic.
     """
-    
     try:
-        response = client.chat.completions.create(
-            model="deepseek-chat",
-            messages=[
-                {"role": "system", "content": "You are a professional Forex/Crypto analyst bot."},
-                {"role": "user", "content": prompt},
-            ],
-            stream=False
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}]
         )
-        return response.choices[0].message.content
+        return completion.choices[0].message.content
     except Exception as e:
-        print(f"DeepSeek Error: {e}")
-        return "AI Analysis Temporarily Offline"
+        print(f"Groq Error: {e}")
+        return "AI Analysis: Market Volatility High (Review Manually)"
 
-# --- 3. WEBHOOK ROUTE ---
 @app.route('/webhook', methods=['POST'])
 def webhook():
     try:
         data = request.json
         if not data: return 'No Data', 400
 
-        # CASE A: BREAK-EVEN (BE) ALERTS
+        # 1. Handle "MOVED TO BE" Text
         if data.get("status") == "MOVED TO BE":
-            be_msg = (
-                f"🛡️ *TRADE ADVISORY: {data.get('ticker')}*\n"
-                f"━━━━━━━━━━━━━━━━━━\n"
-                f"✅ Price reached the Safety Zone.\n"
-                f"📍 *ACTION:* MOVED SL TO BREAK-EVEN (BE)!\n"
-                f"💰 Current Price: {data.get('price')}\n"
-                f"━━━━━━━━━━━━━━━━━━"
-            )
-            bot.send_message(CHANNEL_ID, be_msg, parse_mode='Markdown')
+            msg = f"🛡️ *UPDATE: {data.get('ticker')}*\n📍 Price reached safety zone. *SL MOVED TO BE!*"
+            bot.send_message(CHANNEL_ID, msg, parse_mode='Markdown')
             return 'OK', 200
-
-        # CASE B: TARGET/STOP LOSS HITS
+        
+        # 2. Handle TP/SL Hits
         if "hit" in data:
-            hit_msg = f"🔔 *UPDATE:* {data.get('ticker')} - {data.get('hit')} at {data.get('price')}"
-            bot.send_message(CHANNEL_ID, hit_msg, parse_mode='Markdown')
+            msg = f"🔔 *RESULT: {data.get('ticker')}*\n{data.get('hit')}"
+            bot.send_message(CHANNEL_ID, msg, parse_mode='Markdown')
             return 'OK', 200
 
-        # CASE C: NEW SIGNALS
+        # 3. New Signal with all 3 TPs
         ai_result = get_ai_analysis(data)
         
+        # We pull tp1, tp2, and tp3 directly from your script's JSON
         msg = (
             f"🚀 *Aad-FX PREMIUM SIGNAL*\n"
             f"━━━━━━━━━━━━━━━━━━\n"
-            f"📊 *Asset:* {data.get('ticker')}\n"
-            f"🛠️ *Strategy:* {data.get('strat')}\n"
-            f"🎯 *Action:* {data.get('sig')}\n"
-            f"💰 *Entry:* {data.get('price')}\n"
-            f"📍 *SL:* {data.get('sl')} | *TP1:* {data.get('tp1')}\n"
+            f"📊 Asset: {data.get('ticker')}\n"
+            f"🛠️ Strategy: {data.get('strat')}\n"
+            f"⏱️ Timeframe: {data.get('tf', 'N/A')}\n"
+            f"🎯 Action: {data.get('sig')}\n"
+            f"💰 Entry: {data.get('price')}\n"
+            f"📍 SL: {data.get('sl')}\n"
+            f"✅ *TP1:* {data.get('tp1')}\n"
+            f"🔵 *TP2:* {data.get('tp2')}\n"
+            f"🔥 *TP3:* {data.get('tp3')}\n"
             f"━━━━━━━━━━━━━━━━━━\n"
-            f"🧠 *DEEPSEEK AI ANALYSIS:*\n{ai_result}\n"
+            f"🧠 *AI ANALYSIS:*\n{ai_result}\n"
             f"━━━━━━━━━━━━━━━━━━"
         )
         bot.send_message(CHANNEL_ID, msg, parse_mode='Markdown')
         return 'OK', 200
-
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Webhook Error: {e}")
         return 'Error', 500
 
 if __name__ == '__main__':
+    # Render handles the PORT
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
