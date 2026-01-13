@@ -1,112 +1,98 @@
 import os
 import time
-import logging
 from flask import Flask, request
 import telebot
-from google import genai
-from google.genai import types
+from openai import OpenAI
 
 # --- 1. CONFIGURATION ---
-# Ensure these are set in your Render "Environment Variables"
-TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
+bot = telebot.TeleBot(os.environ.get('TELEGRAM_TOKEN'))
 CHANNEL_ID = os.environ.get('TELEGRAM_CHAT_ID')
-GEMINI_KEY = os.environ.get('GEMINI_API_KEY')
 
-# Initialize clients
-bot = telebot.TeleBot(TELEGRAM_TOKEN)
-client = genai.Client(api_key=GEMINI_KEY)
-
-# Stable 2026 Model ID
-MODEL_ID = "gemini-2.0-flash" 
+# DeepSeek uses the OpenAI format
+client = OpenAI(
+    api_key=os.environ.get('DEEPSEEK_API_KEY'), 
+    base_url="https://api.deepseek.com"
+)
 
 app = Flask(__name__)
-logging.basicConfig(level=logging.INFO)
 
-# --- 2. AI ANALYSIS WITH RETRY LOGIC ---
-def get_ai_rating(data):
-    """
-    Retries with Exponential Backoff if Gemini returns a 429 (Busy).
-    Maximum wait time is 60 seconds to satisfy Free Tier limits.
-    """
-    prompt = (
-        f"Analyze this {data.get('strat', 'Trade')} signal on {data.get('ticker')}. "
-        f"Action: {data.get('sig')}, Timeframe: {data.get('tf')}, Price: {data.get('price')}. "
-        "Rate 1-10 and give a 1-sentence action plan."
-    )
+# --- 2. DEEPSEEK ANALYSIS ENGINE ---
+def get_ai_analysis(data):
+    """Analyzes trade with 80%/70% bias logic using DeepSeek."""
+    strat = data.get('strat', 'Unknown')
+    ticker = data.get('ticker')
     
-    # Retry delays: 5s, 15s, 40s (Totaling ~60s of patience)
-    retry_delays = [5, 15, 40]
+    prompt = f"""
+    Analyze this {strat} trade on {ticker}. 
+    Rules: 
+    1. If it's a Triangle Breakout, Win Probability is 80%.
+    2. If it's a Range trade, Win Probability is 70%.
+    3. For Scalps, Win Probability is 45%.
+    Output: State the Win Probability % clearly and give a 1-sentence professional logic for the entry.
+    """
     
-    for delay in retry_delays:
-        try:
-            # Using the latest SDK syntax for 2026
-            response = client.models.generate_content(
-                model=MODEL_ID,
-                contents=prompt
-            )
-            return response.text
-        except Exception as e:
-            if "429" in str(e): # 'Resource Exhausted' / Rate Limit Hit
-                logging.warning(f"Gemini Busy (429). Retrying in {delay}s...")
-                time.sleep(delay)
-                continue
-            logging.error(f"AI Error: {e}")
-            return f"AI Logic Error: {str(e)[:40]}"
-            
-    return "AI Busy - Review Signal Manually 💔"
+    try:
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": "You are a professional Forex/Crypto analyst bot."},
+                {"role": "user", "content": prompt},
+            ],
+            stream=False
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"DeepSeek Error: {e}")
+        return "AI Analysis Temporarily Offline"
 
-# --- 3. WEBHOOK ENDPOINT ---
+# --- 3. WEBHOOK ROUTE ---
 @app.route('/webhook', methods=['POST'])
 def webhook():
     try:
         data = request.json
-        if not data:
-            return 'No Data', 400
+        if not data: return 'No Data', 400
 
-        # CASE A: TARGET/STOP LOSS HITS (Emoji Alerts)
-        if "hit" in data:
-            hit_msg = (
-                f"🔔 *UPDATE: {data.get('ticker')}*\n"
+        # CASE A: BREAK-EVEN (BE) ALERTS
+        if data.get("status") == "MOVED TO BE":
+            be_msg = (
+                f"🛡️ *TRADE ADVISORY: {data.get('ticker')}*\n"
                 f"━━━━━━━━━━━━━━━━━━\n"
-                f"🎯 *Result:* {data.get('hit')}\n"
-                f"💰 *Price:* {data.get('price')}\n"
+                f"✅ Price reached the Safety Zone.\n"
+                f"📍 *ACTION:* MOVED SL TO BREAK-EVEN (BE)!\n"
+                f"💰 Current Price: {data.get('price')}\n"
                 f"━━━━━━━━━━━━━━━━━━"
             )
+            bot.send_message(CHANNEL_ID, be_msg, parse_mode='Markdown')
+            return 'OK', 200
+
+        # CASE B: TARGET/STOP LOSS HITS
+        if "hit" in data:
+            hit_msg = f"🔔 *UPDATE:* {data.get('ticker')} - {data.get('hit')} at {data.get('price')}"
             bot.send_message(CHANNEL_ID, hit_msg, parse_mode='Markdown')
             return 'OK', 200
 
-        # CASE B: NEW TRADE SIGNALS
-        # This triggers the AI analysis with the retry loop
-        ai_analysis = get_ai_rating(data)
-        
-        # Format "tf" safely
-        tf = data.get('tf', 'N/A')
+        # CASE C: NEW SIGNALS
+        ai_result = get_ai_analysis(data)
         
         msg = (
             f"🚀 *Aad-FX PREMIUM SIGNAL*\n"
             f"━━━━━━━━━━━━━━━━━━\n"
             f"📊 *Asset:* {data.get('ticker')}\n"
-            f"🛠️ *Strategy:* {data.get('strat', 'Multi-Strategy')}\n"
-            f"⏱️ *Timeframe:* {tf}\n"
+            f"🛠️ *Strategy:* {data.get('strat')}\n"
             f"🎯 *Action:* {data.get('sig')}\n"
             f"💰 *Entry:* {data.get('price')}\n"
-            f"📍 *SL:* {data.get('sl')}\n"
-            f"🏁 *TPs:* {data.get('tp1')} | {data.get('tp2')} | {data.get('tp3')}\n"
+            f"📍 *SL:* {data.get('sl')} | *TP1:* {data.get('tp1')}\n"
             f"━━━━━━━━━━━━━━━━━━\n"
-            f"🧠 *AI ANALYSIS:*\n\n"
-            f"{ai_analysis}\n"
-            f"━━━━━━━━━━━━━━━━━━\n"
-            f"⚠️ *Trade at your own risk.*"
+            f"🧠 *DEEPSEEK AI ANALYSIS:*\n{ai_result}\n"
+            f"━━━━━━━━━━━━━━━━━━"
         )
-        
         bot.send_message(CHANNEL_ID, msg, parse_mode='Markdown')
         return 'OK', 200
 
     except Exception as e:
-        logging.error(f"Webhook processing failed: {e}")
+        print(f"Error: {e}")
         return 'Error', 500
 
 if __name__ == '__main__':
-    # Bind to PORT provided by Render
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
