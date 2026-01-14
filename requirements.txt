@@ -1,62 +1,7 @@
-flask
-pyTelegramBotAPI
-groq
-gunicorn
-beautifulsoup4
-requests
-lxml
-```
-
----
-
-## **🧪 Testing the Cache**
-
-### **Test Sequence:**
-
-1. **First Signal** (Cache MISS):
-```
-🌐 Fetching fresh CPI news data...
-❌ Cache MISS for cpi_news
-💾 Cached cpi_news (expires in 60 min)
-✅ Signal sent
-```
-
-2. **Second Signal within 1 hour** (Cache HIT):
-```
-✅ Cache HIT for cpi_news
-✅ Signal sent (faster!)
-```
-
-3. **After 1 hour** (Cache EXPIRED):
-```
-⏰ Cache EXPIRED for cpi_news
-🌐 Fetching fresh CPI news data...
-💾 Cached cpi_news (expires in 60 min)
-```
-
----
-
-## **🚀 Signal Example with Cache**
-```
-🟢 AAD-FX PREMIUM SIGNAL 📈
-══════════════════════════════
-💱 EURUSD | ⏰ 15m
-🎯 Strategy: Triangle Breakout
-──────────────────────────────
-📍 BUY @ 1.08450
-🛑 Stop Loss: 1.08250
-──────────────────────────────
-🎯 TP1: 1.08650
-💎 TP2: 1.08850
-🚀 TP3: 1.09050
-💰 R:R = 1:3.0
-══════════════════════════════
-🧠 AI ANALYSIS
-Win Probability: 75%
-Trade Rating: 8/10
-Bias: Strong breakout momentum. CPI tomorrow reduces edge slightly.
-──────────────────────────────
-📰 News: ⚠️ CPI Release Tomorrow
-📊 MTF: ✅ Medium-term aligned
-══════════════════════════════
-⏰ 14:32 UTC | 📡 Cached
+flask==3.0.0
+pyTelegramBotAPI==4.14.0
+groq==0.4.1
+gunicorn==21.2.0
+beautifulsoup4==4.12.2
+requests==2.31.0
+lxml==4.9.3
