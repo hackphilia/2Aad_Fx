@@ -555,7 +555,11 @@ def webhook():
                 rr_display = f"-1RR ({rr}R actual)"
                 trade['sl_hit'] = True
                 trade['closed'] = True
-                                ai_suggestion = "Stop loss hit. Review market structure for reversal."
+                ai_suggestion = "Stop loss hit. Review market structure for reversal."
+            
+            # Send the final status message for TP/SL hits
+            final_msg = f"{hit_msg}\nStatus: {status_emoji}\nRR: {rr_display}\nAI: {ai_suggestion}"
+            bot.send_message(CHANNEL_ID, final_msg, reply_to_message_id=trade['msg_id'])
         
         return 'OK', 200
 
@@ -565,5 +569,3 @@ def webhook():
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
-
-                
