@@ -17,19 +17,16 @@ app = Flask(__name__)
 # --- TRADE TRACKING WITH FULL STATE ---
 active_trades = {}
 # Structure: {ticker: {
-#   'msg_id': int,
-#   'direction': 'BUY/SELL',
-#   'entry': float,
-#   'sl': float,
-#   'tp1': float,
-#   'tp2': float,
-#   'tp3': float,
-#   'be_hit': bool,
-#   'tp1_hit': bool,
-#   'tp2_hit': bool,
-#   'tp3_hit': bool,
-#   'sl_hit': bool,
-#   'closed': bool
+#   'msg_id': int, 'direction': 'BUY/SELL', 'entry': float, 'sl': float,
+#   'tp1': float, 'tp2': float, 'tp3': float, 'be_hit': bool, 'tp1_hit': bool,
+#   'tp2_hit': bool, 'tp3_hit': bool, 'sl_hit': bool, 'closed': bool
+# }}
+
+# --- CLUSTER TRACKING FOR RIBBON STRATEGY ---
+cluster_states = {}
+# Structure: {ticker: {
+#   'cluster_formed': bool, 'confirmed': bool, 'brokeout': bool,
+#   'direction': str, 'cluster_price': float, 'msg_id': int, 'tf': str
 # }}
 
 # --- CACHE SYSTEM ---
@@ -54,10 +51,7 @@ class NewsCache:
         self.cache = {}
     
     def get_stats(self):
-        return {
-            'items': len(self.cache),
-            'ttl_minutes': self.ttl / 60
-        }
+        return {'items': len(self.cache), 'ttl_minutes': self.ttl / 60}
 
 news_cache = NewsCache(ttl_minutes=60)
 mtf_cache = NewsCache(ttl_minutes=15)
@@ -99,19 +93,9 @@ def scrape_investing_com():
                 continue
         
         if high_risk_events:
-            return {
-                'status': 'HIGH_RISK',
-                'message': f"WARNING: {high_risk_events[0][:30]}",
-                'adjust': -10,
-                'source': 'Investing.com'
-            }
+            return {'status': 'HIGH_RISK', 'message': f"WARNING: {high_risk_events[0][:30]}", 'adjust': -10, 'source': 'Investing.com'}
         
-        return {
-            'status': 'CLEAR',
-            'message': 'No major events',
-            'adjust': 0,
-            'source': 'Investing.com'
-        }
+        return {'status': 'CLEAR', 'message': 'No major events', 'adjust': 0, 'source': 'Investing.com'}
         
     except Exception as e:
         return None
@@ -139,30 +123,15 @@ def scrape_forex_factory():
                         cpi_events.append(event_text)
         
         if cpi_events:
-            return {
-                'status': 'CPI_ALERT',
-                'message': f'ALERT: {cpi_events[0][:30]}',
-                'adjust': -15,
-                'source': 'Forex Factory'
-            }
+            return {'status': 'CPI_ALERT', 'message': f'ALERT: {cpi_events[0][:30]}', 'adjust': -15, 'source': 'Forex Factory'}
         
-        return {
-            'status': 'CLEAR',
-            'message': 'Safe window',
-            'adjust': 0,
-            'source': 'Forex Factory'
-        }
+        return {'status': 'CLEAR', 'message': 'Safe window', 'adjust': 0, 'source': 'Forex Factory'}
         
     except Exception as e:
         return None
 
 def get_default_news():
-    return {
-        'status': 'UNKNOWN',
-        'message': 'News unavailable',
-        'adjust': -5,
-        'source': 'Default'
-    }
+    return {'status': 'UNKNOWN', 'message': 'News unavailable', 'adjust': -5, 'source': 'Default'}
 
 # --- MULTI-TIMEFRAME ---
 def get_mtf_correlation(ticker, current_tf):
@@ -171,37 +140,17 @@ def get_mtf_correlation(ticker, current_tf):
     if cached_data:
         return cached_data
     
-    tf_hierarchy = {
-        '1m': 1, '5m': 2, '15m': 3, '30m': 4, 
-        '1h': 5, '4h': 6, '1d': 7, '1w': 8
-    }
-    
+    tf_hierarchy = {'1m': 1, '5m': 2, '15m': 3, '30m': 4, '1h': 5, '4h': 6, '1d': 7, '1w': 8}
     current_level = tf_hierarchy.get(current_tf, 3)
     
     if current_level <= 2:
-        result = {
-            'confluence': 'WEAK',
-            'message': 'Scalp - high risk',
-            'boost': -5
-        }
+        result = {'confluence': 'WEAK', 'message': 'Scalp - high risk', 'boost': -5}
     elif current_level <= 3:
-        result = {
-            'confluence': 'MODERATE',
-            'message': 'Check 1H trend',
-            'boost': 0
-        }
+        result = {'confluence': 'MODERATE', 'message': 'Check 1H trend', 'boost': 0}
     elif current_level <= 5:
-        result = {
-            'confluence': 'GOOD',
-            'message': 'Medium-term aligned',
-            'boost': 5
-        }
+        result = {'confluence': 'GOOD', 'message': 'Medium-term aligned', 'boost': 5}
     else:
-        result = {
-            'confluence': 'STRONG',
-            'message': 'Higher TF confirmed',
-            'boost': 10
-        }
+        result = {'confluence': 'STRONG', 'message': 'Higher TF confirmed', 'boost': 10}
     
     mtf_cache.set(cache_key, result)
     return result
@@ -215,11 +164,8 @@ def get_ai_analysis(data):
     entry_price = data.get('price', 'N/A')
     
     strategy_probabilities = {
-        'Triangle Breakout': 80,
-        'Triangle Breakdown': 80,
-        'Range Bounce': 70,
-        'Range Rejection': 70,
-        'Scalp MA Cross': 45
+        'Triangle Breakout': 80, 'Triangle Breakdown': 80, 'Range Bounce': 70,
+        'Range Rejection': 70, 'Scalp MA Cross': 45, 'Ribbon Breakout': 75
     }
     
     base_prob = strategy_probabilities.get(strat, 50)
@@ -229,8 +175,7 @@ def get_ai_analysis(data):
     final_prob = base_prob + cpi_data['adjust'] + mtf_data['boost']
     final_prob = max(30, min(95, final_prob))
     
-    prompt = f"""
-You are a professional forex analyst. Analyze this NEW trade setup:
+    prompt = f"""You are a professional forex analyst. Analyze this NEW trade setup:
 
 TRADE DETAILS:
 - Pair: {ticker}
@@ -250,8 +195,7 @@ Win Probability: {final_prob}%
 Trade Rating: X/10
 Analysis: [One sentence on setup quality and key risk]
 
-Keep analysis under 120 characters.
-"""
+Keep analysis under 120 characters."""
     
     try:
         completion = client.chat.completions.create(
@@ -266,22 +210,17 @@ Keep analysis under 120 characters.
 
 # --- AI MOMENTUM ANALYSIS FOR UPDATES ---
 def get_momentum_analysis(trade_data, current_status):
-    """
-    AI analyzes trade progress and suggests hold or exit
-    """
     ticker = trade_data['ticker']
     direction = trade_data['direction']
     entry = trade_data['entry']
     current_price = trade_data.get('current_price', entry)
     
-    # Calculate current profit
     if direction == 'BUY':
         pips_profit = (float(current_price) - float(entry)) * 10000
     else:
         pips_profit = (float(entry) - float(current_price)) * 10000
     
-    prompt = f"""
-You are analyzing a LIVE forex trade. Suggest whether to HOLD or CLOSE.
+    prompt = f"""You are analyzing a LIVE forex trade. Suggest whether to HOLD or CLOSE.
 
 TRADE STATUS:
 - Pair: {ticker}
@@ -298,8 +237,7 @@ Based on momentum and typical price action after {current_status}, should trader
 OUTPUT (ONE LINE):
 Suggestion: [HOLD or CLOSE] - [Brief reason in 10 words or less]
 
-Example: "Suggestion: HOLD - Strong momentum supports TP2 target"
-"""
+Example: "Suggestion: HOLD - Strong momentum supports TP2 target" """
     
     try:
         completion = client.chat.completions.create(
@@ -314,7 +252,6 @@ Example: "Suggestion: HOLD - Strong momentum supports TP2 target"
 
 # --- CALCULATE RR ---
 def calculate_rr(entry, sl, current_price, direction):
-    """Calculate risk:reward ratio"""
     entry = float(entry)
     sl = float(sl)
     current_price = float(current_price)
@@ -340,11 +277,193 @@ def webhook():
             return 'No Data', 400
 
         ticker = data.get('ticker', 'UNKNOWN')
+        alert_type = data.get('alert_type', 'signal')
         
-        # ===== BREAK-EVEN UPDATE =====
+        # ===== RIBBON STRATEGY ALERTS =====
+        if alert_type == "cluster_formed":
+            direction = data.get('direction', 'UNKNOWN')
+            price = data.get('price', 'N/A')
+            spread = data.get('spread', 'N/A')
+            tf = data.get('tf', 'N/A')
+            
+            msg = (
+                f"📍 CLUSTER POINT FORMED\n"
+                f"{'='*35}\n"
+                f"Asset: {ticker} | TF: {tf}\n"
+                f"Direction: {direction}\n"
+                f"Price: {price}\n"
+                f"Ribbon Spread: {spread}%\n"
+                f"{'='*35}\n"
+                f"Status: Awaiting Confirmation\n"
+                f"⏳ Watch for price action...\n"
+                f"Time: {datetime.now().strftime('%H:%M UTC')}"
+            )
+            
+            sent_msg = bot.send_message(CHANNEL_ID, msg)
+            
+            # Track cluster state
+            cluster_states[ticker] = {
+                'cluster_formed': True,
+                'confirmed': False,
+                'brokeout': False,
+                'direction': direction,
+                'cluster_price': price,
+                'msg_id': sent_msg.message_id,
+                'tf': tf
+            }
+            
+            return 'OK', 200
+        
+        elif alert_type == "confirmed":
+            direction = data.get('direction', 'UNKNOWN')
+            price = data.get('price', 'N/A')
+            
+            if ticker not in cluster_states:
+                msg = f"✅ {direction} CONFIRMED\nAsset: {ticker}\nPrice: {price}"
+                bot.send_message(CHANNEL_ID, msg)
+                return 'OK', 200
+            
+            cluster_states[ticker]['confirmed'] = True
+            
+            msg = (
+                f"✅ CONFIRMATION RECEIVED\n"
+                f"{'='*35}\n"
+                f"Asset: {ticker}\n"
+                f"Direction: {direction} ✓\n"
+                f"Price: {price}\n"
+                f"{'='*35}\n"
+                f"Status: Confirmed & Valid\n"
+                f"MMA 40 & 100: Properly aligned\n"
+                f"⏳ Awaiting breakout signal...\n"
+                f"Time: {datetime.now().strftime('%H:%M UTC')}"
+            )
+            
+            bot.send_message(CHANNEL_ID, msg, reply_to_message_id=cluster_states[ticker]['msg_id'])
+            
+            return 'OK', 200
+        
+        elif alert_type == "breakout_due":
+            direction = data.get('direction', 'UNKNOWN')
+            spread = data.get('spread', 'N/A')
+            
+            if ticker not in cluster_states:
+                msg = f"⚡ BREAKOUT DUE\nAsset: {ticker}\nRibbons spreading!"
+                bot.send_message(CHANNEL_ID, msg)
+                return 'OK', 200
+            
+            msg = (
+                f"⚡ BREAKOUT IMMINENT\n"
+                f"{'='*35}\n"
+                f"Asset: {ticker}\n"
+                f"Direction: {direction}\n"
+                f"Ribbon Spread: {spread}%\n"
+                f"{'='*35}\n"
+                f"Status: Ribbons fanning out!\n"
+                f"🚀 Prepare for breakout entry\n"
+                f"Time: {datetime.now().strftime('%H:%M UTC')}"
+            )
+            
+            bot.send_message(CHANNEL_ID, msg, reply_to_message_id=cluster_states[ticker]['msg_id'])
+            
+            return 'OK', 200
+        
+        elif alert_type == "breakout":
+            direction = data.get('direction', 'UNKNOWN')
+            price = data.get('price', 'N/A')
+            tp = data.get('tp', 'N/A')
+            sl = data.get('sl', 'N/A')
+            market_condition = data.get('market_condition', 'NORMAL')
+            stoch_k = data.get('stoch_k', 'N/A')
+            tf = data.get('tf', 'N/A')
+            
+            if ticker in cluster_states:
+                cluster_states[ticker]['brokeout'] = True
+            
+            # Get AI analysis for breakout
+            ai_data = {
+                'strat': 'Ribbon Breakout',
+                'ticker': ticker,
+                'tf': tf,
+                'sig': direction,
+                'price': price
+            }
+            ai_analysis = get_ai_analysis(ai_data)
+            
+            msg = (
+                f"🚀 BREAKOUT CONFIRMED!\n"
+                f"{'='*35}\n"
+                f"Asset: {ticker} | TF: {tf}\n"
+                f"Direction: {direction}\n"
+                f"Entry: {price}\n"
+                f"{'-'*35}\n"
+                f"TP: {tp}\n"
+                f"SL: {sl}\n"
+                f"{'='*35}\n"
+                f"Market Condition: {market_condition}\n"
+                f"Stoch K: {stoch_k}\n"
+                f"{'-'*35}\n"
+                f"AI ANALYSIS:\n{ai_analysis}\n"
+                f"{'='*35}\n"
+                f"Time: {datetime.now().strftime('%H:%M UTC')}"
+            )
+            
+            if ticker in cluster_states:
+                sent_msg = bot.send_message(CHANNEL_ID, msg, reply_to_message_id=cluster_states[ticker]['msg_id'])
+            else:
+                sent_msg = bot.send_message(CHANNEL_ID, msg)
+            
+            # Track as active trade
+            active_trades[ticker] = {
+                'msg_id': sent_msg.message_id,
+                'direction': direction,
+                'entry': price,
+                'sl': sl,
+                'tp1': tp,
+                'tp2': tp,
+                'tp3': tp,
+                'be_hit': False,
+                'tp1_hit': False,
+                'tp2_hit': False,
+                'tp3_hit': False,
+                'sl_hit': False,
+                'closed': False,
+                'ticker': ticker
+            }
+            
+            return 'OK', 200
+        
+        elif alert_type == "trend_change":
+            original_direction = data.get('original_direction', 'UNKNOWN')
+            advice = data.get('advice', 'CLOSE')
+            price = data.get('price', 'N/A')
+            tf = data.get('tf', 'N/A')
+            
+            msg = (
+                f"⚠️ TREND CHANGE DETECTED\n"
+                f"{'='*35}\n"
+                f"Asset: {ticker} | TF: {tf}\n"
+                f"Original Trade: {original_direction}\n"
+                f"Current Price: {price}\n"
+                f"{'='*35}\n"
+                f"🔄 MMA Lines Crossed Against Trade\n"
+                f"⚠️ Recommendation: {advice}\n"
+                f"{'='*35}\n"
+                f"Consider closing or securing profits!\n"
+                f"Time: {datetime.now().strftime('%H:%M UTC')}"
+            )
+            
+            if ticker in cluster_states:
+                bot.send_message(CHANNEL_ID, msg, reply_to_message_id=cluster_states[ticker]['msg_id'])
+            elif ticker in active_trades:
+                bot.send_message(CHANNEL_ID, msg, reply_to_message_id=active_trades[ticker]['msg_id'])
+            else:
+                bot.send_message(CHANNEL_ID, msg)
+            
+            return 'OK', 200
+        
+        # ===== EXISTING BREAK-EVEN UPDATE =====
         if data.get("status") == "MOVED TO BE":
             if ticker not in active_trades:
-                # Trade not tracked, send standalone message
                 msg = (
                     f"BREAK-EVEN SECURED\n"
                     f"Asset: {ticker}\n"
@@ -354,15 +473,12 @@ def webhook():
                 bot.send_message(CHANNEL_ID, msg)
                 return 'OK', 200
             
-            # Check if already sent
             if active_trades[ticker]['be_hit']:
                 print(f"BE already sent for {ticker}, skipping duplicate")
                 return 'OK', 200
             
-            # Update state
             active_trades[ticker]['be_hit'] = True
             
-            # Build status string
             status = f"BE DONE | TP1 {'DONE' if active_trades[ticker]['tp1_hit'] else 'PENDING'} | TP2 PENDING | TP3 PENDING"
             
             msg = (
@@ -373,10 +489,7 @@ def webhook():
                 f"Risk: 0RR (Secured)"
             )
             
-            bot.send_message(
-                CHANNEL_ID, msg,
-                reply_to_message_id=active_trades[ticker]['msg_id']
-            )
+            bot.send_message(CHANNEL_ID, msg, reply_to_message_id=active_trades[ticker]['msg_id'])
             
             return 'OK', 200
         
@@ -386,14 +499,12 @@ def webhook():
             price = data.get('price', 'N/A')
             
             if ticker not in active_trades:
-                # Send standalone if not tracked
                 msg = f"{hit_msg}\nAsset: {ticker}\nPrice: {price}"
                 bot.send_message(CHANNEL_ID, msg)
                 return 'OK', 200
             
             trade = active_trades[ticker]
             
-            # Prevent duplicate messages
             if "TP1" in hit_msg and trade['tp1_hit']:
                 return 'OK', 200
             if "TP2" in hit_msg and trade['tp2_hit']:
@@ -401,14 +512,11 @@ def webhook():
             if "TP3" in hit_msg and trade['tp3_hit']:
                 return 'OK', 200
             if "SL" in hit_msg and (trade['sl_hit'] or trade['be_hit']):
-                # Can't hit SL after BE
                 print(f"SL hit after BE for {ticker}, ignoring")
                 return 'OK', 200
             
-            # Calculate RR
             rr = calculate_rr(trade['entry'], trade['sl'], price, trade['direction'])
             
-            # Determine outcome
             if "TP3" in hit_msg:
                 status_emoji = "DONE"
                 rr_display = f"+3RR ({rr}R actual)"
@@ -421,7 +529,6 @@ def webhook():
                 rr_display = f"+2RR ({rr}R actual)"
                 trade['tp2_hit'] = True
                 
-                # AI suggests hold or close
                 trade_data = {
                     'ticker': ticker,
                     'direction': trade['direction'],
@@ -435,7 +542,6 @@ def webhook():
                 rr_display = f"+1RR ({rr}R actual)"
                 trade['tp1_hit'] = True
                 
-                # AI suggests hold or close
                 trade_data = {
                     'ticker': ticker,
                     'direction': trade['direction'],
@@ -449,157 +555,4 @@ def webhook():
                 rr_display = f"-1RR ({rr}R actual)"
                 trade['sl_hit'] = True
                 trade['closed'] = True
-                ai_suggestion = "Loss taken. Review setup for next trade."
-                
-            else:
-                status_emoji = "UPDATE"
-                rr_display = f"{rr}R"
-                ai_suggestion = "Monitor trade progress"
-            
-            # Build status line
-            be_status = "DONE" if trade['be_hit'] else "PENDING"
-            tp1_status = "DONE" if trade['tp1_hit'] else "PENDING"
-            tp2_status = "DONE" if trade['tp2_hit'] else "PENDING"
-            tp3_status = "DONE" if trade['tp3_hit'] else "PENDING"
-            
-            status_line = f"BE {be_status} | TP1 {tp1_status} | TP2 {tp2_status} | TP3 {tp3_status}"
-            
-            msg = (
-                f"{hit_msg}\n"
-                f"Asset: {ticker}\n"
-                f"Status: {status_line}\n"
-                f"Exit Price: {price}\n"
-                f"Result: {rr_display}\n"
-                f"---\n"
-                f"AI: {ai_suggestion}"
-            )
-            
-            bot.send_message(
-                CHANNEL_ID, msg,
-                reply_to_message_id=trade['msg_id']
-            )
-            
-            # Clean up closed trades
-            if trade['closed']:
-                del active_trades[ticker]
-            
-            return 'OK', 200
-
-        # ===== NEW SIGNAL =====
-        
-        # CHECK FOR DUPLICATE SIGNAL
-        if ticker in active_trades and not active_trades[ticker]['closed']:
-            print(f"DUPLICATE SIGNAL BLOCKED: {ticker} already has active trade")
-            
-            # Send warning message (optional - reply to original signal)
-            existing_trade = active_trades[ticker]
-            warning_msg = (
-                f"DUPLICATE SIGNAL BLOCKED\n"
-                f"Asset: {ticker}\n"
-                f"Reason: Active trade already running\n"
-                f"Current Status:\n"
-                f"- BE: {'DONE' if existing_trade['be_hit'] else 'PENDING'}\n"
-                f"- TP1: {'DONE' if existing_trade['tp1_hit'] else 'PENDING'}\n"
-                f"- TP2: {'DONE' if existing_trade['tp2_hit'] else 'PENDING'}\n"
-                f"- TP3: {'DONE' if existing_trade['tp3_hit'] else 'PENDING'}\n"
-                f"Ignoring new signal to avoid confusion."
-            )
-            
-            bot.send_message(
-                CHANNEL_ID, 
-                warning_msg,
-                reply_to_message_id=existing_trade['msg_id']
-            )
-            
-            return 'OK', 200
-        
-        # Proceed with new signal
-        ai_analysis = get_ai_analysis(data)
-        
-        msg = (
-            f"AAD-FX PREMIUM SIGNAL\n"
-            f"{'='*30}\n"
-            f"Asset: {data.get('ticker')} | TF: {data.get('tf')}\n"
-            f"Strategy: {data.get('strat')}\n"
-            f"Direction: {data.get('sig')} at {data.get('price')}\n"
-            f"{'-'*30}\n"
-            f"SL: {data.get('sl')}\n"
-            f"TP1: {data.get('tp1')}\n"
-            f"TP2: {data.get('tp2')}\n"
-            f"TP3: {data.get('tp3')}\n"
-            f"{'='*30}\n"
-            f"AI ANALYSIS:\n{ai_analysis}\n"
-            f"{'='*30}\n"
-            f"Time: {datetime.now().strftime('%H:%M UTC')}"
-        )
-        
-        sent_msg = bot.send_message(CHANNEL_ID, msg)
-        
-        # Track trade state
-        active_trades[ticker] = {
-            'msg_id': sent_msg.message_id,
-            'direction': data.get('sig'),
-            'entry': data.get('price'),
-            'sl': data.get('sl'),
-            'tp1': data.get('tp1'),
-            'tp2': data.get('tp2'),
-            'tp3': data.get('tp3'),
-            'be_hit': False,
-            'tp1_hit': False,
-            'tp2_hit': False,
-            'tp3_hit': False,
-            'sl_hit': False,
-            'closed': False,
-            'ticker': ticker
-        }
-        
-        print(f"NEW SIGNAL TRACKED: {ticker} (msg_id: {sent_msg.message_id})")
-        
-        return 'OK', 200
-        
-    except Exception as e:
-        print(f"Webhook Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return 'Error', 500
-
-# ADMIN ENDPOINTS
-@app.route('/cache/stats', methods=['GET'])
-def cache_stats():
-    return {
-        'news_cache': news_cache.get_stats(),
-        'mtf_cache': mtf_cache.get_stats(),
-        'active_trades': len(active_trades),
-        'trades': {k: {
-            'direction': v['direction'],
-            'be_hit': v['be_hit'],
-            'tp1_hit': v['tp1_hit'],
-            'tp2_hit': v['tp2_hit'],
-            'tp3_hit': v['tp3_hit'],
-            'closed': v['closed']
-        } for k, v in active_trades.items()}
-    }
-
-@app.route('/cache/clear', methods=['POST'])
-def clear_cache():
-    news_cache.clear()
-    mtf_cache.clear()
-    return {'status': 'Cache cleared'}
-
-@app.route('/trades/clear', methods=['POST'])
-def clear_trades():
-    active_trades.clear()
-    return {'status': 'All trades cleared'}
-
-@app.route('/health', methods=['GET'])
-def health_check():
-    return {
-        'status': 'healthy',
-        'timestamp': datetime.now().isoformat(),
-        'active_trades': len(active_trades)
-    }
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    print(f"Starting AAD-FX Bot on port {port}")
-    app.run(host='0.0.0.0', port=port)
+                ai_s
