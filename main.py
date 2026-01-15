@@ -555,4 +555,15 @@ def webhook():
                 rr_display = f"-1RR ({rr}R actual)"
                 trade['sl_hit'] = True
                 trade['closed'] = True
-                ai_s
+                                ai_suggestion = "Stop loss hit. Review market structure for reversal."
+        
+        return 'OK', 200
+
+    except Exception as e:
+        print(f"Error processing webhook: {e}")
+        return 'Internal Server Error', 500
+
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+
+                
