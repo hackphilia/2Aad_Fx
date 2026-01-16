@@ -282,7 +282,7 @@ def webhook():
             tf = data.get('tf', 'N/A')
             
             msg = (
-                f"CLUSTER POINT FORMED\n"
+                f"🔵 CLUSTER POINT FORMED\n"
                 f"{'='*35}\n"
                 f"Asset: {ticker} | TF: {tf}\n"
                 f"Direction: {direction}\n"
@@ -298,7 +298,6 @@ def webhook():
             sent_msg = bot.send_message(CHANNEL_ID, msg)
             print(f"Message sent! ID: {sent_msg.message_id}")
             
-            # Track cluster state
             cluster_states[ticker] = {
                 'cluster_formed': True,
                 'confirmed': False,
@@ -314,18 +313,19 @@ def webhook():
         elif alert_type == "confirmed":
             direction = data.get('direction', 'UNKNOWN')
             price = data.get('price', 'N/A')
+            tf = data.get('tf', 'N/A')
             
             if ticker not in cluster_states:
-                msg = f"CONFIRMED\nAsset: {ticker}\nDirection: {direction}\nPrice: {price}"
+                msg = f"✅ CONFIRMED\nAsset: {ticker} | TF: {tf}\nDirection: {direction}\nPrice: {price}"
                 bot.send_message(CHANNEL_ID, msg)
                 return jsonify({'status': 'ok'}), 200
             
             cluster_states[ticker]['confirmed'] = True
             
             msg = (
-                f"CONFIRMATION RECEIVED\n"
+                f"✅ CONFIRMATION RECEIVED\n"
                 f"{'='*35}\n"
-                f"Asset: {ticker}\n"
+                f"Asset: {ticker} | TF: {tf}\n"
                 f"Direction: {direction}\n"
                 f"Price: {price}\n"
                 f"{'='*35}\n"
@@ -342,16 +342,17 @@ def webhook():
         elif alert_type == "breakout_due":
             direction = data.get('direction', 'UNKNOWN')
             spread = data.get('spread', 'N/A')
+            tf = data.get('tf', 'N/A')
             
             if ticker not in cluster_states:
-                msg = f"BREAKOUT DUE\nAsset: {ticker}\nRibbons spreading!"
+                msg = f"⚡ BREAKOUT DUE\nAsset: {ticker} | TF: {tf}\nRibbons spreading!"
                 bot.send_message(CHANNEL_ID, msg)
                 return jsonify({'status': 'ok'}), 200
             
             msg = (
-                f"BREAKOUT IMMINENT\n"
+                f"⚡ BREAKOUT IMMINENT\n"
                 f"{'='*35}\n"
-                f"Asset: {ticker}\n"
+                f"Asset: {ticker} | TF: {tf}\n"
                 f"Direction: {direction}\n"
                 f"Ribbon Spread: {spread}%\n"
                 f"{'='*35}\n"
@@ -371,12 +372,12 @@ def webhook():
             sl = data.get('sl', 'N/A')
             market_condition = data.get('market_condition', 'NORMAL')
             stoch_k = data.get('stoch_k', 'N/A')
+            stoch_4h = data.get('stoch_4h', 'N/A')
             tf = data.get('tf', 'N/A')
             
             if ticker in cluster_states:
                 cluster_states[ticker]['brokeout'] = True
             
-            # Get AI analysis for breakout
             ai_data = {
                 'strat': 'Ribbon Breakout',
                 'ticker': ticker,
@@ -387,7 +388,7 @@ def webhook():
             ai_analysis = get_ai_analysis(ai_data)
             
             msg = (
-                f"BREAKOUT CONFIRMED!\n"
+                f"🚀 BREAKOUT CONFIRMED!\n"
                 f"{'='*35}\n"
                 f"Asset: {ticker} | TF: {tf}\n"
                 f"Direction: {direction}\n"
@@ -397,7 +398,8 @@ def webhook():
                 f"SL: {sl}\n"
                 f"{'='*35}\n"
                 f"Market Condition: {market_condition}\n"
-                f"Stoch K: {stoch_k}\n"
+                f"Stoch 15m: {stoch_k}\n"
+                f"Stoch 4H: {stoch_4h}\n"
                 f"{'-'*35}\n"
                 f"AI ANALYSIS:\n{ai_analysis}\n"
                 f"{'='*35}\n"
@@ -409,7 +411,6 @@ def webhook():
             else:
                 sent_msg = bot.send_message(CHANNEL_ID, msg)
             
-            # Track as active trade
             active_trades[ticker] = {
                 'msg_id': sent_msg.message_id,
                 'direction': direction,
@@ -436,7 +437,7 @@ def webhook():
             tf = data.get('tf', 'N/A')
             
             msg = (
-                f"TREND CHANGE DETECTED\n"
+                f"⚠️ TREND CHANGE DETECTED\n"
                 f"{'='*35}\n"
                 f"Asset: {ticker} | TF: {tf}\n"
                 f"Original Trade: {original_direction}\n"
@@ -462,7 +463,7 @@ def webhook():
         if data.get("status") == "MOVED TO BE":
             if ticker not in active_trades:
                 msg = (
-                    f"BREAK-EVEN SECURED\n"
+                    f"🛡️ BREAK-EVEN SECURED\n"
                     f"Asset: {ticker}\n"
                     f"Stop Loss moved to Entry\n"
                     f"Risk eliminated! (0RR secured)"
@@ -479,7 +480,7 @@ def webhook():
             status = f"BE DONE | TP1 {'DONE' if active_trades[ticker]['tp1_hit'] else 'PENDING'} | TP2 PENDING | TP3 PENDING"
             
             msg = (
-                f"BREAK-EVEN SECURED\n"
+                f"🛡️ BREAK-EVEN SECURED\n"
                 f"Asset: {ticker}\n"
                 f"Status: {status}\n"
                 f"Current Price: {data.get('price')}\n"
@@ -584,12 +585,11 @@ def webhook():
             print(f"DUPLICATE SIGNAL BLOCKED: {ticker} already has active trade")
             return jsonify({'status': 'duplicate', 'message': 'Trade already active'}), 200
         
-        # Original signal format
         if 'sig' in data and 'strat' in data:
             ai_analysis = get_ai_analysis(data)
             
             msg = (
-                f"AAD-FX PREMIUM SIGNAL\n"
+                f"📊 AAD-FX PREMIUM SIGNAL\n"
                 f"{'='*30}\n"
                 f"Asset: {data.get('ticker')} | TF: {data.get('tf')}\n"
                 f"Strategy: {data.get('strat')}\n"
@@ -681,19 +681,16 @@ def health_check():
 def home():
     return jsonify({
         'service': 'AAD-FX Trading Bot',
-        'version': '2.0',
+        'version': '2.1',
         'status': 'running',
-        'endpoints': ['/webhook', '/health', '/cache/stats', '/trades/clear', '/test']
+        'endpoints': ['/webhook', '/health', '/cache/stats', '/trades/clear', '/test', '/test/cluster', '/test/breakout']
     })
 
-# TEST ENDPOINT - Send a test cluster notification
 @app.route('/test', methods=['GET', 'POST'])
 def test_notification():
-    """Test endpoint to verify Telegram integration works"""
     try:
-        # Send test message
         test_msg = (
-            f"TEST MESSAGE\n"
+            f"✅ TEST MESSAGE\n"
             f"{'='*35}\n"
             f"Bot is running correctly!\n"
             f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
@@ -717,10 +714,8 @@ def test_notification():
             'channel_id_set': bool(os.environ.get('TELEGRAM_CHAT_ID'))
         }), 500
 
-# TEST CLUSTER ALERT
 @app.route('/test/cluster', methods=['GET'])
 def test_cluster():
-    """Simulate a cluster formation alert"""
     try:
         test_data = {
             'alert_type': 'cluster_formed',
@@ -731,7 +726,6 @@ def test_cluster():
             'spread': '0.18'
         }
         
-        # Manually trigger webhook logic
         direction = test_data['direction']
         ticker = test_data['ticker']
         price = test_data['price']
@@ -739,7 +733,7 @@ def test_cluster():
         tf = test_data['tf']
         
         msg = (
-            f"TEST: CLUSTER POINT FORMED\n"
+            f"🔵 TEST: CLUSTER POINT FORMED\n"
             f"{'='*35}\n"
             f"Asset: {ticker} | TF: {tf}\n"
             f"Direction: {direction}\n"
@@ -764,10 +758,8 @@ def test_cluster():
             'message': str(e)
         }), 500
 
-# TEST BREAKOUT ALERT
 @app.route('/test/breakout', methods=['GET'])
 def test_breakout():
-    """Simulate a breakout alert"""
     try:
         test_data = {
             'alert_type': 'breakout',
@@ -778,7 +770,8 @@ def test_breakout():
             'tp': '1.2600',
             'sl': '1.2680',
             'market_condition': 'NORMAL',
-            'stoch_k': '45.2'
+            'stoch_k': '45.2',
+            'stoch_4h': '62.8'
         }
         
         direction = test_data['direction']
@@ -789,6 +782,7 @@ def test_breakout():
         tf = test_data['tf']
         market_condition = test_data['market_condition']
         stoch_k = test_data['stoch_k']
+        stoch_4h = test_data['stoch_4h']
         
         ai_data = {
             'strat': 'Ribbon Breakout',
@@ -800,7 +794,7 @@ def test_breakout():
         ai_analysis = get_ai_analysis(ai_data)
         
         msg = (
-            f"TEST: BREAKOUT CONFIRMED!\n"
+            f"🚀 TEST: BREAKOUT CONFIRMED!\n"
             f"{'='*35}\n"
             f"Asset: {ticker} | TF: {tf}\n"
             f"Direction: {direction}\n"
@@ -810,7 +804,8 @@ def test_breakout():
             f"SL: {sl}\n"
             f"{'='*35}\n"
             f"Market Condition: {market_condition}\n"
-            f"Stoch K: {stoch_k}\n"
+            f"Stoch 15m: {stoch_k}\n"
+            f"Stoch 4H: {stoch_4h}\n"
             f"{'-'*35}\n"
             f"AI ANALYSIS:\n{ai_analysis}\n"
             f"{'='*35}\n"
@@ -833,9 +828,10 @@ def test_breakout():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    print(f"=== AAD-FX Bot Starting ===")
+    print(f"=== AAD-FX Bot v2.1 Starting ===")
     print(f"Port: {port}")
     print(f"Telegram Token Set: {bool(os.environ.get('TELEGRAM_TOKEN'))}")
     print(f"Channel ID Set: {bool(os.environ.get('TELEGRAM_CHAT_ID'))}")
+    print(f"Groq API Set: {bool(os.environ.get('GROQ_API_KEY'))}")
     print(f"=========================")
     app.run(host='0.0.0.0', port=port, debug=False)
