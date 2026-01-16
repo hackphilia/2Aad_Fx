@@ -683,8 +683,153 @@ def home():
         'service': 'AAD-FX Trading Bot',
         'version': '2.0',
         'status': 'running',
-        'endpoints': ['/webhook', '/health', '/cache/stats', '/trades/clear']
+        'endpoints': ['/webhook', '/health', '/cache/stats', '/trades/clear', '/test']
     })
+
+# TEST ENDPOINT - Send a test cluster notification
+@app.route('/test', methods=['GET', 'POST'])
+def test_notification():
+    """Test endpoint to verify Telegram integration works"""
+    try:
+        # Send test message
+        test_msg = (
+            f"TEST MESSAGE\n"
+            f"{'='*35}\n"
+            f"Bot is running correctly!\n"
+            f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
+            f"{'='*35}\n"
+            f"If you see this, webhook integration works!"
+        )
+        
+        sent = bot.send_message(CHANNEL_ID, test_msg)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Test notification sent to Telegram',
+            'message_id': sent.message_id,
+            'channel_id': CHANNEL_ID
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'telegram_token_set': bool(os.environ.get('TELEGRAM_TOKEN')),
+            'channel_id_set': bool(os.environ.get('TELEGRAM_CHAT_ID'))
+        }), 500
+
+# TEST CLUSTER ALERT
+@app.route('/test/cluster', methods=['GET'])
+def test_cluster():
+    """Simulate a cluster formation alert"""
+    try:
+        test_data = {
+            'alert_type': 'cluster_formed',
+            'ticker': 'EURUSD',
+            'tf': '15m',
+            'direction': 'BUY',
+            'price': '1.0850',
+            'spread': '0.18'
+        }
+        
+        # Manually trigger webhook logic
+        direction = test_data['direction']
+        ticker = test_data['ticker']
+        price = test_data['price']
+        spread = test_data['spread']
+        tf = test_data['tf']
+        
+        msg = (
+            f"TEST: CLUSTER POINT FORMED\n"
+            f"{'='*35}\n"
+            f"Asset: {ticker} | TF: {tf}\n"
+            f"Direction: {direction}\n"
+            f"Price: {price}\n"
+            f"Ribbon Spread: {spread}%\n"
+            f"{'='*35}\n"
+            f"Status: Awaiting Confirmation\n"
+            f"This is a TEST alert\n"
+            f"Time: {datetime.now().strftime('%H:%M UTC')}"
+        )
+        
+        sent_msg = bot.send_message(CHANNEL_ID, msg)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Test cluster alert sent',
+            'message_id': sent_msg.message_id
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+# TEST BREAKOUT ALERT
+@app.route('/test/breakout', methods=['GET'])
+def test_breakout():
+    """Simulate a breakout alert"""
+    try:
+        test_data = {
+            'alert_type': 'breakout',
+            'ticker': 'GBPUSD',
+            'tf': '15m',
+            'direction': 'SELL',
+            'price': '1.2650',
+            'tp': '1.2600',
+            'sl': '1.2680',
+            'market_condition': 'NORMAL',
+            'stoch_k': '45.2'
+        }
+        
+        direction = test_data['direction']
+        ticker = test_data['ticker']
+        price = test_data['price']
+        tp = test_data['tp']
+        sl = test_data['sl']
+        tf = test_data['tf']
+        market_condition = test_data['market_condition']
+        stoch_k = test_data['stoch_k']
+        
+        ai_data = {
+            'strat': 'Ribbon Breakout',
+            'ticker': ticker,
+            'tf': tf,
+            'direction': direction,
+            'price': price
+        }
+        ai_analysis = get_ai_analysis(ai_data)
+        
+        msg = (
+            f"TEST: BREAKOUT CONFIRMED!\n"
+            f"{'='*35}\n"
+            f"Asset: {ticker} | TF: {tf}\n"
+            f"Direction: {direction}\n"
+            f"Entry: {price}\n"
+            f"{'-'*35}\n"
+            f"TP: {tp}\n"
+            f"SL: {sl}\n"
+            f"{'='*35}\n"
+            f"Market Condition: {market_condition}\n"
+            f"Stoch K: {stoch_k}\n"
+            f"{'-'*35}\n"
+            f"AI ANALYSIS:\n{ai_analysis}\n"
+            f"{'='*35}\n"
+            f"This is a TEST alert\n"
+            f"Time: {datetime.now().strftime('%H:%M UTC')}"
+        )
+        
+        sent_msg = bot.send_message(CHANNEL_ID, msg)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Test breakout alert sent',
+            'message_id': sent_msg.message_id
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
