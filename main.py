@@ -681,7 +681,7 @@ def health_check():
 def home():
     return jsonify({
         'service': 'AAD-FX Trading Bot',
-        'version': '2.1',
+        'version': '3.0 - Fan Momentum',
         'status': 'running',
         'endpoints': ['/webhook', '/health', '/cache/stats', '/trades/clear', '/test', '/test/cluster', '/test/breakout']
     })
@@ -690,9 +690,9 @@ def home():
 def test_notification():
     try:
         test_msg = (
-            f"✅ TEST MESSAGE\n"
+            f"✅ TEST MESSAGE - v3.0\n"
             f"{'='*35}\n"
-            f"Bot is running correctly!\n"
+            f"Bot is running with Fan Momentum!\n"
             f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
             f"{'='*35}\n"
             f"If you see this, webhook integration works!"
@@ -741,7 +741,7 @@ def test_cluster():
             f"Ribbon Spread: {spread}%\n"
             f"{'='*35}\n"
             f"Status: Awaiting Confirmation\n"
-            f"This is a TEST alert\n"
+            f"This is a TEST alert (v3.0)\n"
             f"Time: {datetime.now().strftime('%H:%M UTC')}"
         )
         
@@ -809,7 +809,7 @@ def test_breakout():
             f"{'-'*35}\n"
             f"AI ANALYSIS:\n{ai_analysis}\n"
             f"{'='*35}\n"
-            f"This is a TEST alert\n"
+            f"This is a TEST alert (v3.0)\n"
             f"Time: {datetime.now().strftime('%H:%M UTC')}"
         )
         
@@ -828,7 +828,8 @@ def test_breakout():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    print(f"=== AAD-FX Bot v2.1 Starting ===")
+    print(f"=== AAD-FX Bot v3.0 Starting ===")
+    print(f"Features: Fan Momentum Filter + Early Exit")
     print(f"Port: {port}")
     print(f"Telegram Token Set: {bool(os.environ.get('TELEGRAM_TOKEN'))}")
     print(f"Channel ID Set: {bool(os.environ.get('TELEGRAM_CHAT_ID'))}")
